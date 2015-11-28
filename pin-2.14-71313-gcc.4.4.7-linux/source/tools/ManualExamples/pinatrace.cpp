@@ -54,7 +54,7 @@ int main(int argc, char *argv[])
 {
     if (PIN_Init(argc, argv)) return Usage();
 
-    trace = fopen("branchlog.out", "w");
+    trace = fopen("branchlog.log", "w");
 
     INS_AddInstrumentFunction(Instruction, 0);
     PIN_AddFiniFunction(Fini, 0);
