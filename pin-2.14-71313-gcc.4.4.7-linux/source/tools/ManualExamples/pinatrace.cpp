@@ -3,18 +3,39 @@
 
 
 FILE * trace;
+BOOL last_branch_taken;
+int num_branches;
+int num_correct;
 
 // Print a branch record
-VOID RecordBranchTaken(VOID * ip, BOOL taken, VOID * addr)
+VOID RecordBranch(VOID * ip, BOOL taken, VOID * addr)
 {
+    fprintf(trace,"%p: %p", ip, addr);
+    num_branches++;
     if (taken)
     {
-        fprintf(trace,"%p:     TAKEN %p\n", ip, addr);
+        fprintf(trace,"\tT");
+        if (last_branch_taken) {
+            num_correct++;
+        }
+        else
+        {
+            fprintf(trace,"*");
+        }
     }
     else
     {
-        fprintf(trace,"%p: NOT TAKEN %p\n", ip, addr);
+        fprintf(trace,"\tN");
+        if (!last_branch_taken) {
+            num_correct++;
+        }
+        else
+        {
+            fprintf(trace,"*");
+        }
     }
+    fprintf(trace,"\tcorrect=%d/%d\n", num_correct, num_branches);
+    last_branch_taken = taken;
 }
 
 // Is called for every instruction and instruments reads and writes
@@ -23,7 +44,7 @@ VOID Instruction(INS ins, VOID *v)
     if (INS_IsBranch(ins))
     {
         INS_InsertCall(
-            ins, IPOINT_BEFORE, (AFUNPTR)RecordBranchTaken,
+            ins, IPOINT_BEFORE, (AFUNPTR)RecordBranch,
             IARG_INST_PTR, IARG_BRANCH_TAKEN, IARG_BRANCH_TARGET_ADDR, 
             IARG_END);
     }
@@ -55,6 +76,11 @@ int main(int argc, char *argv[])
     if (PIN_Init(argc, argv)) return Usage();
 
     trace = fopen("branchlog.log", "w");
+    
+    // Initialize branch predictor variables
+    last_branch_taken = false;
+    num_branches = 0;
+    num_correct = 0;
 
     INS_AddInstrumentFunction(Instruction, 0);
     PIN_AddFiniFunction(Fini, 0);
