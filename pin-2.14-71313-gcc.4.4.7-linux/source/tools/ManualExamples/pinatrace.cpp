@@ -1,22 +1,52 @@
 #include <stdio.h>
+#include <math.h>
 #include "pin.H"
 
 
 FILE * trace;
-BOOL last_branch_taken;
+int last_branch_taken;
+BOOL prediction;
 int num_branches;
 int num_correct;
+
+void setPrediction(){
+    if (last_branch_taken > 0){
+        prediction = true;
+    }
+    else
+    {
+        prediction = false;
+    }
+}
+
+void updateBHT(bool taken){
+    if (taken)
+    {
+        if (last_branch_taken == -1) last_branch_taken++;
+        last_branch_taken++;
+    }
+    else
+    {
+        if (last_branch_taken == 1) last_branch_taken--;
+        last_branch_taken--;
+    }
+    last_branch_taken = std::max(last_branch_taken, -2);
+    last_branch_taken = std::min(last_branch_taken, 2);
+}
 
 // Print a branch record
 VOID RecordBranch(VOID * ip, BOOL taken, VOID * addr)
 {
     fprintf(trace,"%p: %p", ip, addr);
     num_branches++;
+    setPrediction();
+    
     if (taken)
     {
         fprintf(trace,"\tT");
-        if (last_branch_taken) {
+        if (prediction) {
             num_correct++;
+            fprintf(trace," ");
         }
         else
         {
@@ -26,16 +56,17 @@ VOID RecordBranch(VOID * ip, BOOL taken, VOID * addr)
     else
     {
         fprintf(trace,"\tN");
-        if (!last_branch_taken) {
+        if (!prediction) {
             num_correct++;
+            fprintf(trace," ");
         }
         else
         {
             fprintf(trace,"*");
         }
     }
-    fprintf(trace,"\tcorrect=%d/%d\n", num_correct, num_branches);
-    last_branch_taken = taken;
+    fprintf(trace," %+d\tcorrect=%d/%d\n", last_branch_taken, num_correct, num_branches);
+    updateBHT(taken);
 }
 
 // Is called for every instruction and instruments reads and writes
@@ -80,7 +111,7 @@ int main(int argc, char *argv[])
     trace = fopen("branchlog.log", "w");
     
     // Initialize branch predictor variables
-    last_branch_taken = false;
+    last_branch_taken = -1;
     num_branches = 0;
     num_correct = 0;
 
