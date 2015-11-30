@@ -52,6 +52,8 @@ VOID Instruction(INS ins, VOID *v)
 
 VOID Fini(INT32 code, VOID *v)
 {
+    fprintf(trace,"...\nOVERALL correct=%d/%d\t%f\n", 
+        num_correct, num_branches, (double)num_correct/(double)num_branches);
     fprintf(trace, "#eof\n");
     fclose(trace);
 }
