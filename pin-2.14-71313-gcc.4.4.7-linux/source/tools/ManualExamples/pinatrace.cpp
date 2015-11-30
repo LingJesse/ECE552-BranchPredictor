@@ -2,7 +2,7 @@
 #include <math.h>
 #include "pin.H"
 
-const int BHT_BITS = 5;
+const int BHT_BITS = 10;
 FILE * trace;
 int last_branch_taken;
 BOOL prediction;
@@ -83,8 +83,8 @@ VOID Instruction(INS ins, VOID *v)
 
 VOID Fini(INT32 code, VOID *v)
 {
-    fprintf(trace,"...\nOVERALL correct=%d/%d\t%f\n", 
-        num_correct, num_branches, (double)num_correct/(double)num_branches);
+    fprintf(trace,"...\nOVERALL correct=%d/%d\t%f using a %d-bit BHT\n", 
+        num_correct, num_branches, (double)num_correct/(double)num_branches, BHT_BITS);
     fprintf(trace, "#eof\n");
     fclose(trace);
 }
