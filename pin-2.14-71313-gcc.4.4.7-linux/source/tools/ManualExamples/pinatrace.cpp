@@ -2,7 +2,7 @@
 #include <math.h>
 #include "pin.H"
 
-
+const int BHT_BITS = 5;
 FILE * trace;
 int last_branch_taken;
 BOOL prediction;
@@ -30,8 +30,8 @@ void updateBHT(bool taken){
         if (last_branch_taken == 1) last_branch_taken--;
         last_branch_taken--;
     }
-    last_branch_taken = std::max(last_branch_taken, -2);
-    last_branch_taken = std::min(last_branch_taken, 2);
+    last_branch_taken = std::max(last_branch_taken, -BHT_BITS);
+    last_branch_taken = std::min(last_branch_taken, BHT_BITS);
 }
 
 // Print a branch record
