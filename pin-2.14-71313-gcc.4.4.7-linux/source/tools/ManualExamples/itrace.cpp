@@ -4,7 +4,7 @@
 
 const int BHT_BITS = 2; // set the number of bits to use for the BHT (1 disables this)
 const int PATH_DEPTH = 4; // set the number of bits to use for the BHR 
-const int TABLE_ENTRIES = 1<<16; //2^16
+const int TABLE_ENTRIES = 1<<10; //2^16
 
 FILE * trace;
 int bhr[TABLE_ENTRIES];
@@ -173,7 +173,7 @@ int main(int argc, char *argv[])
 {
     if (PIN_Init(argc, argv)) return Usage();
 
-    trace = fopen("branchlog.out", "w");
+    trace = fopen("branchlog.log", "w");
     
     //Initialize branch predictor variables
     for (int i=0; i<PATH_DEPTH; i++) {
