@@ -141,7 +141,7 @@ int main(int argc, char *argv[])
         branch_history[i] = false;
     }
     for (int i=0; i<BHR_ENTRIES; i++) {
-        bhr[i] = -1;
+        bhr[i] = 1;
     }
     bhr_current_index = 0;
     num_branches = 0;

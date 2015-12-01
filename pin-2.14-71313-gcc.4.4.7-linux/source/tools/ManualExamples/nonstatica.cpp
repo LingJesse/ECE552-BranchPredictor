@@ -1,143 +1,159 @@
-/*BEGIN_LEGAL 
-Intel Open Source License 
-
-Copyright (c) 2002-2015 Intel Corporation. All rights reserved.
- 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are
-met:
-
-Redistributions of source code must retain the above copyright notice,
-this list of conditions and the following disclaimer.  Redistributions
-in binary form must reproduce the above copyright notice, this list of
-conditions and the following disclaimer in the documentation and/or
-other materials provided with the distribution.  Neither the name of
-the Intel Corporation nor the names of its contributors may be used to
-endorse or promote products derived from this software without
-specific prior written permission.
- 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE INTEL OR
-ITS CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-END_LEGAL */
-//
-// At Image load time, look at all INSs of all RTNs, check that the IPs of the INSs are not duplicated in the RTN
-//
-
-#include <stdio.h>
-#include <iomanip>
-#include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
-#include <vector>
+#include <math.h>
 #include "pin.H"
 
-typedef struct 
-{
-    ADDRINT start;
-    ADDRINT end;
-}RTN_INTERNAL_RANGE;
 
-vector< RTN_INTERNAL_RANGE> rtnInternalRangeList;
+const int HISTORY_LENGTH = 62; // set the number of bits to use for branch history
+const float theta = (1.93 * HISTORY_LENGTH) + 14;
 
-// Pin calls this function every time a new img is loaded
+FILE * trace;
+bool branch_history[HISTORY_LENGTH]; // stores the current recent history of branch results
+float weight[HISTORY_LENGTH];  //storage for weights
+float current_perceptron_result;
 
+bool prediction;
+int num_branches;
+int num_correct;
 
-VOID ImageLoad(IMG img, VOID *v)
-{
-    
-    for (SEC sec = IMG_SecHead(img); SEC_Valid(sec); sec = SEC_Next(sec))
-    { 
-        for (RTN rtn = SEC_RtnHead(sec); RTN_Valid(rtn); rtn = RTN_Next(rtn))
-        {
-            std::cout << "  Rtn: " << setw(8) << hex << RTN_Address(rtn) << " " << RTN_Name(rtn) << endl;
-            string path;
-            INT32 line;
-            PIN_GetSourceLocation(RTN_Address(rtn), NULL, &line, &path);
-
-            if (path != "")
-            {
-                std::cout << "File " << path << " Line " << line << endl; 
-            }
-
-            // Prepare for processing of RTN, an  RTN is not broken up into BBLs,
-            // it is merely a sequence of INSs 
-            RTN_Open(rtn);
-            
-            if (!INS_Valid(RTN_InsHead(rtn)))
-            {
-                RTN_Close(rtn);
-                continue;
-            }
-            RTN_INTERNAL_RANGE rtnInternalRange;
-            rtnInternalRange.start = INS_Address(RTN_InsHead(rtn));
-            rtnInternalRange.end 
-              = INS_Address(RTN_InsHead(rtn)) + INS_Size(RTN_InsHead(rtn));
-            INS lastIns = INS_Invalid();
-            for (INS ins = RTN_InsHead(rtn); INS_Valid(ins); ins = INS_Next(ins))
-            {
-                std::cout << "    " << setw(8) << hex << INS_Address(ins) << " " << INS_Disassemble(ins) << endl;
-                if (INS_Valid(lastIns))
-                {
-                    if ((INS_Address(lastIns) + INS_Size(lastIns)) == INS_Address(ins))
-                    {
-                        rtnInternalRange.end = INS_Address(ins)+INS_Size(ins);
-                    }
-                    else
-                    { 
-                        std::cout << "  rtnInternalRangeList.push_back " << setw(8) << hex << rtnInternalRange.start << " " << setw(8) << hex << rtnInternalRange.end << endl;
-                        rtnInternalRangeList.push_back(rtnInternalRange);
-                        // make sure this ins has not already appeared in this RTN
-                        for (vector<RTN_INTERNAL_RANGE>::iterator ri = rtnInternalRangeList.begin(); ri != rtnInternalRangeList.end(); ri++)
-                        {
-                            if ((INS_Address(ins) >= ri->start) && (INS_Address(ins)<ri->end))
-                            {
-                                std::cout << "***Error - above instruction already appeared in this RTN\n";
-                                std::cout << "  in rtnInternalRangeList " << setw(8) << hex << ri->start << " " << setw(8) << hex << ri->end << endl;
-                                exit (1);
-                            }
-                        }
-                        rtnInternalRange.start = INS_Address(ins);
-                        rtnInternalRange.end = INS_Address(ins) + INS_Size(ins);
-                    }
-                }
-                lastIns = ins;
-            }
-
-            // to preserve space, release data associated with RTN after we have processed it
-            RTN_Close(rtn);
-            rtnInternalRangeList.clear();
-        }
+// generate the current perceptron result
+void updatePerceptronResult(){
+    current_perceptron_result = 0.0;
+    for (int i=0; i<HISTORY_LENGTH; i++){
+        float temp_history = -1.0;
+        if (branch_history[i]) { temp_history = 1.0; }
+        current_perceptron_result += weight[i] * temp_history;
     }
-    
 }
 
+// set the prediction to true or false depending on the perceptron result
+void setPrediction(){
+    if (current_perceptron_result > 0){
+        prediction  = true;
+    }
+    else
+    {
+        prediction  = false;
+    }
+}
 
+// train the perceptron with the current branch taken result
+void trainPerceptron(bool taken){
+    float temp_taken = -1.0;
+    if (taken) { temp_taken = 1.0; }
+    float temp_result = current_perceptron_result;
+    if (temp_result<0) {temp_result *= -1.0;}
+    if (((current_perceptron_result<0) != (temp_taken<0)) || 
+        (temp_result < theta)){
+        for (int i=0; i<HISTORY_LENGTH; i++){
+            float temp_history = -1.0;
+            if (branch_history[i]) { temp_history = 1.0; }
+            weight[i] = weight[i] + temp_taken*temp_history;
+        }
+    }
+}
+
+// update the recent history of branch results
+void updateBranchHistory(bool taken){    
+    for (int i=0; i<HISTORY_LENGTH-1; i++) {
+        branch_history[i] = branch_history[i+1];
+    }
+    branch_history[HISTORY_LENGTH-1] = taken;
+}
+
+// Print a branch record
+VOID RecordBranch(VOID * ip, BOOL taken, VOID * addr)
+{
+    fprintf(trace,"%p: %p", ip, addr);
+    num_branches++;
+    
+    updatePerceptronResult();
+    setPrediction();
+    
+    if (taken)
+    {
+        fprintf(trace,"\tT");
+        if (prediction) {
+            num_correct++;
+            fprintf(trace," ");
+        }
+        else
+        {
+            fprintf(trace,"*");
+        }
+    }
+    else
+    {
+        fprintf(trace,"\tN");
+        if (!prediction) {
+            num_correct++;
+            fprintf(trace," ");
+        }
+        else
+        {
+            fprintf(trace,"*");
+        }
+    }
+    fprintf(trace," %.2f\tcorrect=%d/%d\n", current_perceptron_result, num_correct, num_branches);
+    
+    trainPerceptron(taken);
+    updateBranchHistory(taken);
+}
+
+// Is called for every instruction and instruments reads and writes
+VOID Instruction(INS ins, VOID *v)
+{
+    if (INS_IsBranch(ins))
+    {
+        INS_InsertCall(
+            ins, IPOINT_BEFORE, (AFUNPTR)RecordBranch,
+            IARG_INST_PTR, IARG_BRANCH_TAKEN, IARG_BRANCH_TARGET_ADDR, 
+            IARG_END);
+    }
+}
+
+VOID Fini(INT32 code, VOID *v)
+{
+    fprintf(trace,"...\nOVERALL correct=%d/%d\t%f using a %d-deep history perceptron predictor.\n", 
+        num_correct, num_branches, (double)num_correct/(double)num_branches, HISTORY_LENGTH);
+    fprintf(trace, "#eof\n");
+    fclose(trace);
+}
+
+/* ===================================================================== */
+/* Print Help Message                                                    */
+/* ===================================================================== */
+   
+INT32 Usage()
+{
+    PIN_ERROR( "This Pintool prints a trace of branch instructions\n" 
+              + KNOB_BASE::StringKnobSummary() + "\n");
+    return -1;
+}
 
 /* ===================================================================== */
 /* Main                                                                  */
 /* ===================================================================== */
 
-int main(int argc, char * argv[])
+int main(int argc, char *argv[])
 {
-    // prepare for image instrumentation mode
-    PIN_InitSymbols();
+    if (PIN_Init(argc, argv)) return Usage();
 
-    // Initialize pin
-    if (PIN_Init(argc, argv)) return 1;
+    trace = fopen("branchlog.log", "w");
+    
+    // Initialize branch predictor variables
+    for (int i=0; i<HISTORY_LENGTH; i++){
+        branch_history[i] = false;
+        weight[i] = 0.0;
+    }
+    current_perceptron_result = 0.0;
+    num_branches = 0;
+    num_correct = 0;
 
-    // Register ImageLoad to be called when an image is loaded
-    IMG_AddInstrumentFunction(ImageLoad, 0);
+    INS_AddInstrumentFunction(Instruction, 0);
+    PIN_AddFiniFunction(Fini, 0);
 
-    // Start the program, never returns
+    // Never returns
     PIN_StartProgram();
     
     return 0;
