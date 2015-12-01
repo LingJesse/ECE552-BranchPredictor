@@ -2,8 +2,8 @@
 #include <math.h>
 #include "pin.H"
 
-const int BHT_BITS = 8; // set the number of bits to use for the BHT (1 disables this)
-const int BHR_BITS = 16; // set the number of bits to use for the BHR (1 disables this)
+const int BHT_BITS = 2; // set the number of bits to use for the BHT (1 disables this)
+const int BHR_BITS = 4; // set the number of bits to use for the BHR (1 disables this)
 const int BHR_ENTRIES = 1<<BHR_BITS;
 
 FILE * trace;

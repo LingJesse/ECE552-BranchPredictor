@@ -2,26 +2,49 @@
 #include <math.h>
 #include "pin.H"
 
-const int BHT_BITS = 8; // set the number of bits to use for the BHT (1 disables this)
-const int PATH_DEPTH = 16; // set the number of addresses to use in history aka correlation depth (1 disables this)
-const int TABLE_ENTRIES = 1<<PATH_DEPTH;
+const int BHT_BITS = 2; // set the number of bits to use for the BHT (1 disables this)
+const int PATH_DEPTH = 4; // set the number of bits to use for the BHR 
+const int TABLE_ENTRIES = 1<<16; //2^16
 
 FILE * trace;
-int bhr[PATH_DEPTH];
+int bhr[TABLE_ENTRIES];
+string bhr_entries[TABLE_ENTRIES];
 int bhr_current_index;
-string branch_address_history[PATH_DEPTH]; // stores the current recent history of branch addresses
+string branch_history[PATH_DEPTH]; // stores the current recent history of branch results
 bool prediction;
 int num_branches;
 int num_correct;
+int pathsUsed = 0;
 
 void updateBHRIndex(){
-    int index = 0;
-    for (int i=0; i<BHR_BITS-1; i++) {
+	string currentPath;
+	for (int i=0; i<PATH_DEPTH; i++){
+		currentPath = currentPath + branch_history[i];
+	}
+	
+	bool found = false;
+	for (int i=0; i<TABLE_ENTRIES; i++){
+		string checkPath = bhr_entries[i];
+		if(currentPath.compare(checkPath) == 0){
+			bhr_current_index = i;
+			//printf("Path Match Found");
+			found = true;
+			break;
+		}
+	}
+	if(!found){
+		bhr_entries[pathsUsed] = currentPath;
+		bhr_current_index = pathsUsed;
+		pathsUsed += 1;
+	}
+	
+/*     int index = 0;
+    for (int i=0; i<PATH_DEPTH-1; i++) {
         if (branch_history[i]){
             index = index | (1<<i);
         }
     }
-    bhr_current_index = index;
+    bhr_current_index = index; */
 }
 
 void setPrediction(){
@@ -35,11 +58,12 @@ void setPrediction(){
 }
 
 // update the recent history of branch results
-void updateBranchHistory(bool taken){    
-    for (int i=0; i<BHR_BITS-1; i++) {
+void updateBranchHistory(string address){    
+	//printf("%s", address.c_str());
+     for (int i=0; i<PATH_DEPTH-1; i++) {
         branch_history[i] = branch_history[i+1];
     }
-    branch_history[BHR_BITS-1] = taken;
+    branch_history[PATH_DEPTH-1] = address; 
 }
 
 void updateBHT(bool taken){
@@ -63,7 +87,15 @@ VOID RecordBranch(VOID * ip, BOOL taken, VOID * addr)
     fprintf(trace,"%p: %p", ip, addr);
     num_branches++;
     updateBHRIndex();
-    setPrediction();
+	//Warming Up Branch Predictor
+	if(num_branches<PATH_DEPTH)
+	{
+		prediction = false;
+	}
+	else
+	{
+		setPrediction();
+	}
     
     if (taken)
     {
@@ -90,9 +122,13 @@ VOID RecordBranch(VOID * ip, BOOL taken, VOID * addr)
         }
     }
     fprintf(trace," %+d\tcorrect=%d/%d\n", bhr[bhr_current_index], num_correct, num_branches);
-    
     updateBHT(taken);
-    updateBranchHistory(taken);
+	
+	char buffer [100];
+	sprintf(buffer,"%p", addr);
+	std::string str1 (buffer);
+	//printf("%s",str1.c_str());
+    updateBranchHistory(str1);
 }
 
 // Is called for every instruction and instruments reads and writes
@@ -109,8 +145,8 @@ VOID Instruction(INS ins, VOID *v)
 
 VOID Fini(INT32 code, VOID *v)
 {
-    fprintf(trace,"...\nOVERALL correct=%d/%d\t%f using a %d-bit saturating TESTING, %d-bit correlated predictor.\n", 
-        num_correct, num_branches, (double)num_correct/(double)num_branches, BHT_BITS, BHR_BITS);
+    fprintf(trace,"...\nOVERALL correct=%d/%d\t%f using a %d-bit saturating, %d-deep path based predictor.\n", 
+        num_correct, num_branches, (double)num_correct/(double)num_branches, BHT_BITS, PATH_DEPTH);
     fprintf(trace, "#eof\n");
     fclose(trace);
 }
@@ -136,11 +172,11 @@ int main(int argc, char *argv[])
 
     trace = fopen("branchlog.log", "w");
     
-    // Initialize branch predictor variables
+    //Initialize branch predictor variables
     for (int i=0; i<PATH_DEPTH; i++) {
-        branch_history[i] = false;
+       branch_history[i] = "";
     }
-    for (int i=0; i<BHR_ENTRIES; i++) {
+    for (int i=0; i<TABLE_ENTRIES; i++) {
         bhr[i] = -1;
     }
     bhr_current_index = 0;
