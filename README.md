@@ -15,18 +15,18 @@ You may specify the number of bits to use for the BHT at the top using the `BHT_
 
 To run all at once, run:
 
-`make; sudo ../../../pin.sh -t obj-intel64/pinatrace.so -- /bin/ls; head -20 branchlog.log; tail -3 branchlog.log`
+`make; sudo ../../../pin.sh -t obj-intel64/pinatrace.so -- /bin/ls; head -20 branchlog.out; tail -3 branchlog.out`
 
 ## itrace.cpp Changes: Path-based Predictor
 You may specify the depth of the target path using the `PATH_DEPTH` constant.
 
 To run all at once, run:
 
-`make; sudo ../../../pin.sh -t obj-intel64/itrace.so -- /bin/ls; head -20 branchlog.log; tail -3 branchlog.log`
+`make; sudo ../../../pin.sh -t obj-intel64/itrace.so -- /bin/ls; head -20 branchlog.out; tail -3 branchlog.out`
 
 ## nonstatica.cpp Changes: Perceptron Predictor
 
 To run all at once, run:
 
-`make; sudo ../../../pin.sh -t obj-intel64/nonstatica.so -- /bin/ls; head -20 branchlog.log; tail -3 branchlog.log
+`make; sudo ../../../pin.sh -t obj-intel64/nonstatica.so -- /bin/ls; head -20 branchlog.out; tail -3 branchlog.out`
 

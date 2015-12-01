@@ -134,7 +134,7 @@ int main(int argc, char *argv[])
 {
     if (PIN_Init(argc, argv)) return Usage();
 
-    trace = fopen("branchlog.log", "w");
+    trace = fopen("branchlog.out", "w");
     
     // Initialize branch predictor variables
     for (int i=0; i<BHR_BITS; i++) {
