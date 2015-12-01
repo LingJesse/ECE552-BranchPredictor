@@ -4,8 +4,8 @@
 #include "pin.H"
 
 
-const int HISTORY_LENGTH = 62; // set the number of bits to use for branch history
-const float theta = (1.93 * HISTORY_LENGTH) + 14;
+const int HISTORY_LENGTH = 42; // set the number of bits to use for branch history
+const float theta = (1.93 * HISTORY_LENGTH) + 14.0;
 
 FILE * trace;
 bool branch_history[HISTORY_LENGTH]; // stores the current recent history of branch results
@@ -16,19 +16,23 @@ bool prediction;
 int num_branches;
 int num_correct;
 
+float boolToFloat(bool input){
+    float temp = -1.0;
+    if (input) { temp = 1.0; }
+    return temp;
+}
+
 // generate the current perceptron result
 void updatePerceptronResult(){
     current_perceptron_result = 0.0;
     for (int i=0; i<HISTORY_LENGTH; i++){
-        float temp_history = -1.0;
-        if (branch_history[i]) { temp_history = 1.0; }
-        current_perceptron_result += weight[i] * temp_history;
+        current_perceptron_result += weight[i] * boolToFloat(branch_history[i]);
     }
 }
 
 // set the prediction to true or false depending on the perceptron result
 void setPrediction(){
-    if (current_perceptron_result > 0){
+    if (current_perceptron_result > 0.0){
         prediction  = true;
     }
     else
@@ -39,26 +43,23 @@ void setPrediction(){
 
 // train the perceptron with the current branch taken result
 void trainPerceptron(bool taken){
-    float temp_taken = -1.0;
-    if (taken) { temp_taken = 1.0; }
     float temp_result = current_perceptron_result;
-    if (temp_result<0) {temp_result *= -1.0;}
-    if (((current_perceptron_result<0) != (temp_taken<0)) || 
-        (temp_result < theta)){
+    if (temp_result < 0.0) {temp_result *= -1.0;}
+    
+    if ((prediction != taken) || 
+        (temp_result <= theta)){
         for (int i=0; i<HISTORY_LENGTH; i++){
-            float temp_history = -1.0;
-            if (branch_history[i]) { temp_history = 1.0; }
-            weight[i] = weight[i] + temp_taken*temp_history;
+            weight[i] = weight[i] + boolToFloat(taken)*boolToFloat(branch_history[i]);
         }
     }
 }
 
 // update the recent history of branch results
-void updateBranchHistory(bool taken){    
-    for (int i=0; i<HISTORY_LENGTH-1; i++) {
-        branch_history[i] = branch_history[i+1];
+void updateBranchHistory(){
+    for (int i=1; i<HISTORY_LENGTH; i++) {
+        branch_history[i] = branch_history[i-1];
     }
-    branch_history[HISTORY_LENGTH-1] = taken;
+    branch_history[0] = true;
 }
 
 // Print a branch record
@@ -94,10 +95,10 @@ VOID RecordBranch(VOID * ip, BOOL taken, VOID * addr)
             fprintf(trace,"*");
         }
     }
-    fprintf(trace," %.2f\tcorrect=%d/%d\n", current_perceptron_result, num_correct, num_branches);
+    fprintf(trace," %g\tcorrect=%d/%d\n", current_perceptron_result, num_correct, num_branches);
     
     trainPerceptron(taken);
-    updateBranchHistory(taken);
+    updateBranchHistory();
 }
 
 // Is called for every instruction and instruments reads and writes
