@@ -33,6 +33,9 @@ void updateBHRIndex(){
 		}
 	}
 	if(!found){
+		if(pathsUsed == TABLE_ENTRIES){
+			pathsUsed = 0;
+		}
 		bhr_entries[pathsUsed] = currentPath;
 		bhr_current_index = pathsUsed;
 		pathsUsed += 1;
