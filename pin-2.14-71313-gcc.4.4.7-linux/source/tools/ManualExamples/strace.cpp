@@ -1,142 +1,179 @@
-/*BEGIN_LEGAL 
-Intel Open Source License 
-
-Copyright (c) 2002-2015 Intel Corporation. All rights reserved.
- 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are
-met:
-
-Redistributions of source code must retain the above copyright notice,
-this list of conditions and the following disclaimer.  Redistributions
-in binary form must reproduce the above copyright notice, this list of
-conditions and the following disclaimer in the documentation and/or
-other materials provided with the distribution.  Neither the name of
-the Intel Corporation nor the names of its contributors may be used to
-endorse or promote products derived from this software without
-specific prior written permission.
- 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE INTEL OR
-ITS CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-END_LEGAL */
-/*
- *  This file contains an ISA-portable PIN tool for tracing system calls
- */
-
 #include <stdio.h>
-
-#if defined(TARGET_MAC)
-#include <sys/syscall.h>
-#elif !defined(TARGET_WINDOWS)
-#include <syscall.h>
-#endif
-
+#include <stdlib.h>
+#include <math.h>
 #include "pin.H"
 
 
+const int COUNTER_BITS = 4; // set the number of bits to use for the counter
+const int NUM_TABLES = 4; //set the number of predictor tables to utilize
+const int TABLE_SIZE = 1<<10 ; // size of each table
+
+const int HISTORY_LENGTH = 1<<(NUM_TABLES-1); // set the number of bits to use for branch history (determined using a=2)
+const float theta = NUM_TABLES;
+
 FILE * trace;
 
+int *predictionTable[NUM_TABLES]; //Prediction Table
+int historyVariations[NUM_TABLES]; //Variations on depth per table
 
-// Print syscall number and arguments
-VOID SysBefore(ADDRINT ip, ADDRINT num, ADDRINT arg0, ADDRINT arg1, ADDRINT arg2, ADDRINT arg3, ADDRINT arg4, ADDRINT arg5)
-{
-#if defined(TARGET_LINUX) && defined(TARGET_IA32) 
-    // On ia32 Linux, there are only 5 registers for passing system call arguments, 
-    // but mmap needs 6. For mmap on ia32, the first argument to the system call 
-    // is a pointer to an array of the 6 arguments
-    if (num == SYS_mmap)
-    {
-        ADDRINT * mmapArgs = reinterpret_cast<ADDRINT *>(arg0);
-        arg0 = mmapArgs[0];
-        arg1 = mmapArgs[1];
-        arg2 = mmapArgs[2];
-        arg3 = mmapArgs[3];
-        arg4 = mmapArgs[4];
-        arg5 = mmapArgs[5];
+string branch_history[HISTORY_LENGTH]; // stores the current recent history of branch results
+float currentSum;
+
+bool prediction;
+bool wasCorrect; //Was the prediction correct?
+int num_branches;
+int num_correct;
+
+
+//Creating and Initilizing Predictor Tables
+void createPredictorTables(){
+	for(int i=0; i<NUM_TABLES;i++){
+		int table[TABLE_SIZE];
+		for(int j=0; j<TABLE_SIZE; j++){
+			table[j] = 0;
+		}
+		predictionTable[i] = table;
+		historyVariations[i] = 1<<i;
+	}
+}
+
+
+// generate the current result
+void updateResult(){
+    currentSum = NUM_TABLES/2.0;
+    for (int i=0; i<NUM_TABLES; i++){
+		int historyDepth = historyVariations[i];
+		string currentPath;
+		for (int j=0; j<historyDepth; j++){
+				currentPath = currentPath + branch_history[HISTORY_LENGTH-(j+1)];
+				
+		}
+		int hash = atoi(currentPath.c_str());
+		int *currentTable = predictionTable[0];
+		printf("%i", currentTable[0]);
+		currentSum += currentTable[hash];
     }
-#endif
-
-    fprintf(trace,"0x%lx: %ld(0x%lx, 0x%lx, 0x%lx, 0x%lx, 0x%lx, 0x%lx)",
-        (unsigned long)ip,
-        (long)num,
-        (unsigned long)arg0,
-        (unsigned long)arg1,
-        (unsigned long)arg2,
-        (unsigned long)arg3,
-        (unsigned long)arg4,
-        (unsigned long)arg5);
+	//printf("%f", currentSum);
 }
 
-// Print the return value of the system call
-VOID SysAfter(ADDRINT ret)
+// set the prediction to true or false depending on the perceptron result
+void setPrediction(){
+    if (currentSum > 0.0){
+        prediction  = true;
+    }
+    else
+    {
+        prediction  = false;
+    }
+}
+
+// Update the predictor
+void updatePredictor(bool wasCorrect){
+/* 	if(currentSum<=theta || !wasCorrect){
+		for (int i=0; i<NUM_TABLES; i++){
+			int historyDepth = historyVariations[i];
+			string currentPath;
+			for (int j=0; j<historyDepth; j++){
+				currentPath = currentPath + branch_history[HISTORY_LENGTH-(j+1)];
+				
+			}
+		int hash = atoi(currentPath.c_str());
+		
+		if(prediction){
+			//predictionTable[i][hash]+=1;
+		}
+		else{
+			//predictionTable[i][hash]+=(-1);
+		}
+		}
+	} */
+}
+
+// update the recent history of branch results
+// target address in [HISTORY_LENGTH-1]
+void updateBranchHistory(string address){    
+	//printf("%s", address.c_str());
+     for (int i=0; i<HISTORY_LENGTH-1; i++) {
+        branch_history[i] = branch_history[i+1];
+    }
+    branch_history[HISTORY_LENGTH-1] = address; 
+}
+
+// Print a branch record
+VOID RecordBranch(VOID * ip, BOOL taken, VOID * addr)
 {
-    fprintf(trace,"returns: 0x%lx\n", (unsigned long)ret);
-    fflush(trace);
+    fprintf(trace,"%p: %p", ip, addr);
+    num_branches++;
+    
+    updateResult();
+    setPrediction();
+    
+    if (taken)
+    {
+        fprintf(trace,"\tT");
+        if (prediction) {
+			wasCorrect = true;
+            num_correct++;
+            fprintf(trace," ");
+        }
+        else
+        {
+			wasCorrect = false;
+            fprintf(trace,"*");
+        }
+    }
+    else
+    {
+        fprintf(trace,"\tN");
+        if (!prediction) {
+			wasCorrect = true;
+            num_correct++;
+            fprintf(trace," ");
+        }
+        else
+        {
+			wasCorrect = false;
+            fprintf(trace,"*");
+        }
+    }
+    fprintf(trace," %g\tcorrect=%d/%d\n", currentSum, num_correct, num_branches);
+    
+    updatePredictor(wasCorrect);
+  	char buffer [100];
+	sprintf(buffer,"%p", addr);
+	std::string str1 (buffer);
+	//printf("%s",str1.c_str());
+    updateBranchHistory(str1);
 }
 
-VOID SyscallEntry(THREADID threadIndex, CONTEXT *ctxt, SYSCALL_STANDARD std, VOID *v)
-{
-    SysBefore(PIN_GetContextReg(ctxt, REG_INST_PTR),
-        PIN_GetSyscallNumber(ctxt, std),
-        PIN_GetSyscallArgument(ctxt, std, 0),
-        PIN_GetSyscallArgument(ctxt, std, 1),
-        PIN_GetSyscallArgument(ctxt, std, 2),
-        PIN_GetSyscallArgument(ctxt, std, 3),
-        PIN_GetSyscallArgument(ctxt, std, 4),
-        PIN_GetSyscallArgument(ctxt, std, 5));
-}
-
-VOID SyscallExit(THREADID threadIndex, CONTEXT *ctxt, SYSCALL_STANDARD std, VOID *v)
-{
-    SysAfter(PIN_GetSyscallReturn(ctxt, std));
-}
-
-// Is called for every instruction and instruments syscalls
+// Is called for every instruction and instruments reads and writes
 VOID Instruction(INS ins, VOID *v)
 {
-    // For O/S's (Mac) that don't support PIN_AddSyscallEntryFunction(),
-    // instrument the system call instruction.
-
-    if (INS_IsSyscall(ins) && INS_HasFallThrough(ins))
+    if (INS_IsBranch(ins))
     {
-        // Arguments and syscall number is only available before
-        INS_InsertCall(ins, IPOINT_BEFORE, AFUNPTR(SysBefore),
-                       IARG_INST_PTR, IARG_SYSCALL_NUMBER,
-                       IARG_SYSARG_VALUE, 0, IARG_SYSARG_VALUE, 1,
-                       IARG_SYSARG_VALUE, 2, IARG_SYSARG_VALUE, 3,
-                       IARG_SYSARG_VALUE, 4, IARG_SYSARG_VALUE, 5,
-                       IARG_END);
-
-        // return value only available after
-        INS_InsertCall(ins, IPOINT_AFTER, AFUNPTR(SysAfter),
-                       IARG_SYSRET_VALUE,
-                       IARG_END);
+        INS_InsertCall(
+            ins, IPOINT_BEFORE, (AFUNPTR)RecordBranch,
+            IARG_INST_PTR, IARG_BRANCH_TAKEN, IARG_BRANCH_TARGET_ADDR, 
+            IARG_END);
     }
 }
 
 VOID Fini(INT32 code, VOID *v)
 {
-    fprintf(trace,"#eof\n");
+    fprintf(trace,"...\nOVERALL correct=%d/%d\t%f using a %d-table GEHL predictor.\n", 
+        num_correct, num_branches, (double)num_correct/(double)num_branches, NUM_TABLES);
+    fprintf(trace, "#eof\n");
     fclose(trace);
 }
 
 /* ===================================================================== */
 /* Print Help Message                                                    */
 /* ===================================================================== */
-
+   
 INT32 Usage()
 {
-    PIN_ERROR("This tool prints a log of system calls" 
-                + KNOB_BASE::StringKnobSummary() + "\n");
+    PIN_ERROR( "This Pintool prints a trace of branch instructions\n" 
+              + KNOB_BASE::StringKnobSummary() + "\n");
     return -1;
 }
 
@@ -148,12 +185,21 @@ int main(int argc, char *argv[])
 {
     if (PIN_Init(argc, argv)) return Usage();
 
-    trace = fopen("strace.out", "w");
+    trace = fopen("branchlog.out", "w");
+    
+	//Create Predictor Tables depending on parameters 
+	createPredictorTables();
+	
+    // Initialize branch history
+    for (int i=0; i<HISTORY_LENGTH; i++){
+        branch_history[i] = "";
+    }
+    currentSum = 0.0;
+    num_branches = 0;
+    num_correct = 0;
+	wasCorrect = false;
 
     INS_AddInstrumentFunction(Instruction, 0);
-    PIN_AddSyscallEntryFunction(SyscallEntry, 0);
-    PIN_AddSyscallExitFunction(SyscallExit, 0);
-
     PIN_AddFiniFunction(Fini, 0);
 
     // Never returns

@@ -180,7 +180,7 @@ int main(int argc, char *argv[])
        branch_history[i] = "";
     }
     for (int i=0; i<TABLE_ENTRIES; i++) {
-        bhr[i] = -1;
+        bhr[i] = 1;
     }
     bhr_current_index = 0;
     num_branches = 0;
