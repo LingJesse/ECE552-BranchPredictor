@@ -4,7 +4,7 @@
 #include "pin.H"
 
 
-const int HISTORY_LENGTH = 42; // set the number of bits to use for branch history
+const int HISTORY_LENGTH = 62; // set the number of bits to use for branch history
 const float theta = (1.93 * HISTORY_LENGTH) + 14.0;
 
 FILE * trace;
@@ -55,7 +55,8 @@ void trainPerceptron(bool taken){
 }
 
 // update the recent history of branch results
-void updateBranchHistory(){
+void updateBranchHistory(bool taken){
+    branch_history[0] = taken;
     for (int i=1; i<HISTORY_LENGTH; i++) {
         branch_history[i] = branch_history[i-1];
     }
@@ -98,7 +99,7 @@ VOID RecordBranch(VOID * ip, BOOL taken, VOID * addr)
     fprintf(trace," %g\tcorrect=%d/%d\n", current_perceptron_result, num_correct, num_branches);
     
     trainPerceptron(taken);
-    updateBranchHistory();
+    updateBranchHistory(taken);
 }
 
 // Is called for every instruction and instruments reads and writes

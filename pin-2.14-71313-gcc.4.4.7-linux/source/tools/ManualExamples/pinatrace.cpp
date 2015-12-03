@@ -4,6 +4,7 @@
 
 const int BHT_BITS = 2; // set the number of bits to use for the BHT (1 disables this)
 const int BHR_BITS = 12; // set the number of bits to use for the BHR (1 disables this)
+const int SATURATING_NUM = (1<<BHT_BITS)/2;
 const int BHR_ENTRIES = 1<<BHR_BITS;
 
 FILE * trace;
@@ -60,8 +61,8 @@ void updateBHT(bool taken){
         if (bhr[bhr_current_index] == 1) bhr[bhr_current_index]--;
         bhr[bhr_current_index]--;
     }
-    bhr[bhr_current_index] = std::max(bhr[bhr_current_index], -BHT_BITS);
-    bhr[bhr_current_index] = std::min(bhr[bhr_current_index], BHT_BITS);
+    bhr[bhr_current_index] = std::max(bhr[bhr_current_index], -SATURATING_NUM);
+    bhr[bhr_current_index] = std::min(bhr[bhr_current_index], SATURATING_NUM);
 }
 
 // Print a branch record
