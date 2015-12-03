@@ -5,15 +5,15 @@
 
 
 const int COUNTER_BITS = 4; // set the number of bits to use for the counter
-const int NUM_TABLES = 4; //set the number of predictor tables to utilize
-const int TABLE_SIZE = 1<<10 ; // size of each table
+const int NUM_TABLES = 8; //set the number of predictor tables to utilize
+const int TABLE_SIZE = 1<<20 ; // size of each table
 
 const int HISTORY_LENGTH = 1<<(NUM_TABLES-1); // set the number of bits to use for branch history (determined using a=2)
 const float theta = NUM_TABLES;
 
 FILE * trace;
 
-int *predictionTable[NUM_TABLES]; //Prediction Table
+int predictionTable[NUM_TABLES][TABLE_SIZE]; //Prediction Table
 int historyVariations[NUM_TABLES]; //Variations on depth per table
 
 string branch_history[HISTORY_LENGTH]; // stores the current recent history of branch results
@@ -24,15 +24,24 @@ bool wasCorrect; //Was the prediction correct?
 int num_branches;
 int num_correct;
 
+//hash function
+unsigned long hashing(const char *str)
+    {
+        unsigned long hash = 5381;
+        int c;
 
+        while ((c = *str++))
+            hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+
+        return hash/(LLONG_MAX/(1<<19));
+    }
+	
 //Creating and Initilizing Predictor Tables
 void createPredictorTables(){
 	for(int i=0; i<NUM_TABLES;i++){
-		int table[TABLE_SIZE];
 		for(int j=0; j<TABLE_SIZE; j++){
-			table[j] = 0;
+			predictionTable[i][j] = 0;
 		}
-		predictionTable[i] = table;
 		historyVariations[i] = 1<<i;
 	}
 }
@@ -48,12 +57,14 @@ void updateResult(){
 				currentPath = currentPath + branch_history[HISTORY_LENGTH-(j+1)];
 				
 		}
-		int hash = atoi(currentPath.c_str());
-		int *currentTable = predictionTable[0];
-		printf("%i", currentTable[0]);
-		currentSum += currentTable[hash];
+		//int hash = atoi(currentPath.c_str());
+		unsigned long hash = hashing(currentPath.c_str());
+		//printf("%lu\n", hash);
+		currentSum += predictionTable[i][hash];
     }
-	//printf("%f", currentSum);
+	//if (currentSum < 0){
+	//	printf("%f\n", currentSum);
+	//}
 }
 
 // set the prediction to true or false depending on the perceptron result
@@ -68,8 +79,8 @@ void setPrediction(){
 }
 
 // Update the predictor
-void updatePredictor(bool wasCorrect){
-/* 	if(currentSum<=theta || !wasCorrect){
+void updatePredictor(bool wasCorrect, bool taken){
+ 	if(currentSum<=theta || !wasCorrect){
 		for (int i=0; i<NUM_TABLES; i++){
 			int historyDepth = historyVariations[i];
 			string currentPath;
@@ -77,16 +88,23 @@ void updatePredictor(bool wasCorrect){
 				currentPath = currentPath + branch_history[HISTORY_LENGTH-(j+1)];
 				
 			}
-		int hash = atoi(currentPath.c_str());
+		unsigned long hash = hashing(currentPath.c_str());
 		
-		if(prediction){
-			//predictionTable[i][hash]+=1;
+		if(taken){
+			predictionTable[i][hash]+=1;
+			predictionTable[i][hash] = std::min(predictionTable[i][hash], COUNTER_BITS);
 		}
 		else{
-			//predictionTable[i][hash]+=(-1);
+			predictionTable[i][hash]+=(-1);
+			predictionTable[i][hash] = std::max(predictionTable[i][hash], -COUNTER_BITS);
+			//printf("False");
 		}
+		if(predictionTable[i][hash] > COUNTER_BITS){
+			printf("%i\n",predictionTable[i][hash]);
 		}
-	} */
+
+		}
+	} 
 }
 
 // update the recent history of branch results
@@ -138,7 +156,7 @@ VOID RecordBranch(VOID * ip, BOOL taken, VOID * addr)
     }
     fprintf(trace," %g\tcorrect=%d/%d\n", currentSum, num_correct, num_branches);
     
-    updatePredictor(wasCorrect);
+    updatePredictor(wasCorrect, taken);
   	char buffer [100];
 	sprintf(buffer,"%p", addr);
 	std::string str1 (buffer);
