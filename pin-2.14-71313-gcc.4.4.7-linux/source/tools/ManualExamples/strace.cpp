@@ -5,6 +5,7 @@
 
 
 const int COUNTER_BITS = 4; // set the number of bits to use for the counter
+const int SATURATING_NUM = (1<<COUNTER_BITS)/2;
 const int NUM_TABLES = 8; //set the number of predictor tables to utilize
 const int TABLE_SIZE = 1<<20 ; // size of each table
 
@@ -92,15 +93,12 @@ void updatePredictor(bool wasCorrect, bool taken){
 		
 		if(taken){
 			predictionTable[i][hash]+=1;
-			predictionTable[i][hash] = std::min(predictionTable[i][hash], COUNTER_BITS);
+			predictionTable[i][hash] = std::min(predictionTable[i][hash], SATURATING_NUM);
 		}
 		else{
 			predictionTable[i][hash]+=(-1);
-			predictionTable[i][hash] = std::max(predictionTable[i][hash], -COUNTER_BITS);
+			predictionTable[i][hash] = std::max(predictionTable[i][hash], -SATURATING_NUM);
 			//printf("False");
-		}
-		if(predictionTable[i][hash] > COUNTER_BITS){
-			printf("%i\n",predictionTable[i][hash]);
 		}
 
 		}
@@ -154,6 +152,7 @@ VOID RecordBranch(VOID * ip, BOOL taken, VOID * addr)
             fprintf(trace,"*");
         }
     }
+	
     fprintf(trace," %g\tcorrect=%d/%d\n", currentSum, num_correct, num_branches);
     
     updatePredictor(wasCorrect, taken);
