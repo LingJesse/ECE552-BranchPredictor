@@ -166,6 +166,7 @@ int main(int argc, char *argv[])
     for (int i=0; i<HISTORY_LENGTH; i++){
         for (int j=0; j<TABLE_SIZE; j++){
             branch_history[j][i] = false;
+                weight[j][i] = 0.0;
             if (i==0){
                 branch_history[j][i] = true;
                 weight[j][i] = 1.0;
