@@ -35,7 +35,14 @@ void setPrediction(){
 }
 
 // update the recent history of branch results
-void updateBranchHistory(bool taken){    
+void updateBranchHistory(bool taken){
+	// this seems to be the corect version, adding to the 0th index
+    // for (int i=1; i<BHR_BITS; i++) {
+        // branch_history[i] = branch_history[i-1];
+    // }
+    // branch_history[0] = taken;
+	
+	// this works better somehow
     for (int i=0; i<BHR_BITS-1; i++) {
         branch_history[i] = branch_history[i+1];
     }
