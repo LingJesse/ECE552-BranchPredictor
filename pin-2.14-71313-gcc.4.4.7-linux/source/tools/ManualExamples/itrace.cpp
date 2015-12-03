@@ -4,7 +4,7 @@
 
 const int BHT_BITS = 2; // set the number of bits to use for the BHT (1 disables this)
 const int PATH_DEPTH = 4; // set the number of bits to use for the BHR 
-const int TABLE_ENTRIES = 1<<16; //2^16
+const int TABLE_ENTRIES = 1<<10; //2^16
 
 FILE * trace;
 int bhr[TABLE_ENTRIES];
@@ -180,7 +180,7 @@ int main(int argc, char *argv[])
        branch_history[i] = "";
     }
     for (int i=0; i<TABLE_ENTRIES; i++) {
-        bhr[i] = -1;
+        bhr[i] = 1;
     }
     bhr_current_index = 0;
     num_branches = 0;

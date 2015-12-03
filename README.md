@@ -30,3 +30,9 @@ To run all at once, run:
 
 `make; sudo ../../../pin.sh -t obj-intel64/nonstatica.so -- /bin/ls; head -20 branchlog.out; tail -3 branchlog.out`
 
+## strace.cpp Changes: GEHL Predictor
+
+To run all at once, run:
+
+`make; sudo ../../../pin.sh -t obj-intel64/strace.so -- /bin/ls; head -20 branchlog.out; tail -3 branchlog.out`
+
