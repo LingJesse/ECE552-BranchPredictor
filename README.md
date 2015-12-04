@@ -41,3 +41,9 @@ To run all at once, run:
 To run all at once, run:
 
 `make; sudo ../../../pin.sh -t obj-intel64/proccount.so -- /bin/ls; head -20 branchlog.out; tail -3 branchlog.out`
+
+## staticcount.cpp Changes: Data-correlated Predictor
+
+To run all at once, run:
+
+`make; sudo ../../../pin.sh -t obj-intel64/staticcount.so -- /bin/ls; head -20 branchlog.out; tail -3 branchlog.out`
