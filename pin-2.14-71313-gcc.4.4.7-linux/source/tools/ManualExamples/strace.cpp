@@ -3,10 +3,12 @@
 #include <math.h>
 #include "pin.H"
 
+long num_instr = 0;
+const long NUM_INSTR_SKIPPED = 1000000;
 
 const int COUNTER_BITS = 4; // set the number of bits to use for the counter
 const int SATURATING_NUM = (1<<COUNTER_BITS)/2;
-const int NUM_TABLES = 8; //set the number of predictor tables to utilize
+const int NUM_TABLES = 6; //set the number of predictor tables to utilize
 const int TABLE_SIZE = 1<<20 ; // size of each table
 
 const int HISTORY_LENGTH = 1<<(NUM_TABLES-1); // set the number of bits to use for branch history (determined using a=2)
@@ -163,9 +165,18 @@ VOID RecordBranch(VOID * ip, BOOL taken, VOID * addr)
     updateBranchHistory(str1);
 }
 
+// This function is called before every instruction is executed
+VOID docount() { num_instr++; }
+
 // Is called for every instruction and instruments reads and writes
 VOID Instruction(INS ins, VOID *v)
 {
+    // Insert a call to docount before every instruction, no arguments are passed
+    INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)docount, IARG_END);
+    if (num_instr <= NUM_INSTR_SKIPPED){
+        num_correct = 0;
+        num_branches = 0;
+    }
     if (INS_IsBranch(ins))
     {
         INS_InsertCall(
@@ -179,6 +190,7 @@ VOID Fini(INT32 code, VOID *v)
 {
     fprintf(trace,"...\nOVERALL correct=%d/%d\t%f using a %d-table GEHL predictor.\n", 
         num_correct, num_branches, (double)num_correct/(double)num_branches, NUM_TABLES);
+    fprintf(trace, "num_instr=%lu\n", num_instr);
     fprintf(trace, "#eof\n");
     fclose(trace);
 }

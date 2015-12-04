@@ -3,6 +3,8 @@
 #include <math.h>
 #include "pin.H"
 
+long num_instr = 0;
+const long NUM_INSTR_SKIPPED = 1000000;
 
 const int HISTORY_LENGTH = 62; // set the number of bits to use for branch history
 const float theta = (1.93 * HISTORY_LENGTH) + 14.0;
@@ -147,9 +149,18 @@ VOID RecordBranch(VOID * ip, BOOL taken, VOID * addr)
     updateBranchHistory(taken);
 }
 
+// This function is called before every instruction is executed
+VOID docount() { num_instr++; }
+
 // Is called for every instruction and instruments reads and writes
 VOID Instruction(INS ins, VOID *v)
 {
+    // Insert a call to docount before every instruction, no arguments are passed
+    INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)docount, IARG_END);
+    if (num_instr <= NUM_INSTR_SKIPPED){
+        num_correct = 0;
+        num_branches = 0;
+    }
     if (INS_IsBranch(ins))
     {
         INS_InsertCall(
@@ -163,6 +174,7 @@ VOID Fini(INT32 code, VOID *v)
 {
     fprintf(trace,"...\nOVERALL correct=%d/%d\t%f using a %d-deep history perceptron predictor.\n", 
         num_correct, num_branches, (double)num_correct/(double)num_branches, HISTORY_LENGTH);
+    fprintf(trace, "num_instr=%lu\n", num_instr);
     fprintf(trace, "#eof\n");
     fclose(trace);
 }

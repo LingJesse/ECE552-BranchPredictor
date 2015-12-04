@@ -2,6 +2,10 @@
 #include <math.h>
 #include "pin.H"
 
+long num_instr = 0;
+const long NUM_INSTR_SKIPPED = 1000000;
+REG reg;
+
 const int BHT_BITS = 2; // set the number of bits to use for the BHT (1 disables this)
 const int BHR_BITS = 12; // set the number of bits to use for the BHR (1 disables this)
 const int SATURATING_NUM = (1<<BHT_BITS)/2;
@@ -197,20 +201,28 @@ VOID RecordBranchNoReg(VOID * ip, BOOL taken, VOID * addr)
     updateBranchHistory(taken);
 }
 
+// This function is called before every instruction is executed
+VOID docount_andreg() { 
+    num_instr++; 
+    
+}
+
 // Is called for every instruction and instruments reads and writes
 VOID Instruction(INS ins, VOID *v)
 {
+    // Insert a call to docount before every instruction, no arguments are passed
+    INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)docount_andreg, IARG_END);
+    if (num_instr <= NUM_INSTR_SKIPPED){
+        num_correct = 0;
+        num_branches = 0;
+    }
     unsigned int temp = 1;
-    REG reg = INS_RegR(ins, temp);
+    reg = INS_RegR(ins, temp);
     // if (reg != 0){
         // INS_InsertCall(
             // ins, IPOINT_BEFORE, (AFUNPTR)updateRegisterHistory,
             // IARG_REG_VALUE, reg,
             // IARG_END);
-    // }
-    // if (num_branches < 0){
-        // printf("%s\n", INS_Mnemonic(ins).c_str());
-        // if (reg) printf("%d\n", reg);
     // }
 
     if (INS_IsBranch(ins))
@@ -237,6 +249,7 @@ VOID Fini(INT32 code, VOID *v)
         num_correct, num_branches, (double)num_correct/(double)num_branches);
     fprintf(trace,"%%register=%d/%d\t%f\n", 
         reg_predictions, num_branches, (double)reg_predictions/(double)num_branches);
+    fprintf(trace, "num_instr=%lu\n", num_instr);
     fprintf(trace, "#eof\n");
     fclose(trace);
 }

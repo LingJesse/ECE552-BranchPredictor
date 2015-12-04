@@ -2,6 +2,9 @@
 #include <math.h>
 #include "pin.H"
 
+long num_instr = 0;
+const long NUM_INSTR_SKIPPED = 1000000;
+
 const int BHT_BITS = 2; // set the number of bits to use for the BHT (1 disables this)
 const int PATH_DEPTH = 4; // set the number of target addresses to maintain
 const int SATURATING_NUM = (1<<BHT_BITS)/2;
@@ -135,9 +138,18 @@ VOID RecordBranch(VOID * ip, BOOL taken, VOID * addr)
     updateBranchHistory(str1);
 }
 
+// This function is called before every instruction is executed
+VOID docount() { num_instr++; }
+
 // Is called for every instruction and instruments reads and writes
 VOID Instruction(INS ins, VOID *v)
 {
+    // Insert a call to docount before every instruction, no arguments are passed
+    INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)docount, IARG_END);
+    if (num_instr <= NUM_INSTR_SKIPPED){
+        num_correct = 0;
+        num_branches = 0;
+    }
     if (INS_IsBranch(ins))
     {
         INS_InsertCall(
@@ -151,6 +163,7 @@ VOID Fini(INT32 code, VOID *v)
 {
     fprintf(trace,"...\nOVERALL correct=%d/%d\t%f using a %d-bit saturating, %d-deep path based predictor.\n", 
         num_correct, num_branches, (double)num_correct/(double)num_branches, BHT_BITS, PATH_DEPTH);
+    fprintf(trace, "num_instr=%lu\n", num_instr);
     fprintf(trace, "#eof\n");
     fclose(trace);
 }
