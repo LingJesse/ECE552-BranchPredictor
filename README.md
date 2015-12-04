@@ -36,3 +36,8 @@ To run all at once, run:
 
 `make; sudo ../../../pin.sh -t obj-intel64/strace.so -- /bin/ls; head -20 branchlog.out; tail -3 branchlog.out`
 
+## proccount.cpp Changes: Tournament Predictor
+
+To run all at once, run:
+
+`make; sudo ../../../pin.sh -t obj-intel64/proccount.so -- /bin/ls; head -20 branchlog.out; tail -3 branchlog.out`
